@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 function Dashboard() {
   const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -10,75 +11,110 @@ function Dashboard() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', padding: '50px', backgroundColor: '#f0f2f5' }}>
-      <h2 style={{ textAlign: 'center', marginBottom: '40px' }}>Welcome Admin</h2>
-
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '30px' }}>
-        {/* Trips */}
-        <div 
-          onClick={() => navigate('/trips')}
-          style={{
-            padding: '30px',
-            backgroundColor: 'white',
-            borderRadius: '10px',
-            width: '200px',
-            textAlign: 'center',
-            boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
-            cursor: 'pointer',
-            transition: 'transform 0.2s'
-          }}
-          onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-          onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
-        >
-          <h3>Trips</h3>
-        </div>
-
-        {/* Drivers */}
-        <div 
-          onClick={() => navigate('/drivers')}
-          style={{
-            padding: '30px',
-            backgroundColor: 'white',
-            borderRadius: '10px',
-            width: '200px',
-            textAlign: 'center',
-            boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
-            cursor: 'pointer',
-            transition: 'transform 0.2s'
-          }}
-          onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-          onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
-        >
-          <h3>Drivers</h3>
-        </div>
-
-        {/* Day End Report */}
-        <div 
-          onClick={() => navigate('/dayendreport')}
-          style={{
-            padding: '30px',
-            backgroundColor: 'white',
-            borderRadius: '10px',
-            width: '200px',
-            textAlign: 'center',
-            boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
-            cursor: 'pointer',
-            transition: 'transform 0.2s'
-          }}
-          onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-          onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
-        >
-          <h3>Day End Report</h3>
-        </div>
+    <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', position: 'relative' }}>
+      
+      {/* Sidebar (Right Side) */}
+      <div style={{
+        width: menuOpen ? '200px' : '0',
+        height: '100%',
+        backgroundColor: '#007bff',
+        position: 'fixed',
+        top: 0,
+        right: 0,
+        overflowX: 'hidden',
+        transition: '0.5s',
+        paddingTop: '60px',
+        zIndex: 2
+      }}>
+        {menuOpen && (
+          <div style={{ color: 'white', paddingLeft: '20px' }}>
+            <p style={{ cursor: 'pointer', marginBottom: '20px' }} onClick={() => navigate('/trips')}>Trips</p>
+            <p style={{ cursor: 'pointer', marginBottom: '20px' }} onClick={() => navigate('/drivers')}>Drivers</p>
+            <p style={{ cursor: 'pointer', marginBottom: '20px' }} onClick={() => navigate('/dayendreport')}>Day End Report</p>
+            <p style={{ cursor: 'pointer', marginBottom: '20px', color: 'red' }} onClick={handleLogout}>Logout</p>
+          </div>
+        )}
       </div>
 
-      <div style={{ textAlign: 'center', marginTop: '50px' }}>
-        <button 
-          onClick={handleLogout}
-          style={{ padding: '10px 20px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
-        >
-          Logout
-        </button>
+      {/* Hamburger Icon (Top Right) */}
+      <div style={{ position: 'absolute', top: '20px', right: '20px', fontSize: '30px', cursor: 'pointer', zIndex: 3 }}>
+        <span onClick={() => setMenuOpen(!menuOpen)}>☰</span>
+      </div>
+
+      {/* Center Dashboard Content */}
+      <div style={{ paddingTop: '80px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '30px' }}>
+        <h2>Welcome Admin!</h2>
+
+        {/* Cards Section */}
+        <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', justifyContent: 'center' }}>
+
+          {/* Trips Card */}
+          <div 
+            onClick={() => navigate('/trips')}
+            style={{
+              width: '150px',
+              height: '100px',
+              backgroundColor: 'white',
+              borderRadius: '10px',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              fontSize: '18px',
+              cursor: 'pointer',
+              transition: 'transform 0.2s'
+            }}
+            onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+            onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            Trips
+          </div>
+
+          {/* Drivers Card */}
+          <div 
+            onClick={() => navigate('/drivers')}
+            style={{
+              width: '150px',
+              height: '100px',
+              backgroundColor: 'white',
+              borderRadius: '10px',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              fontSize: '18px',
+              cursor: 'pointer',
+              transition: 'transform 0.2s'
+            }}
+            onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+            onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            Drivers
+          </div>
+
+          {/* Day End Report Card */}
+          <div 
+            onClick={() => navigate('/dayendreport')}
+            style={{
+              width: '150px',
+              height: '100px',
+              backgroundColor: 'white',
+              borderRadius: '10px',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              fontSize: '18px',
+              cursor: 'pointer',
+              transition: 'transform 0.2s'
+            }}
+            onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+            onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            Day End Report
+          </div>
+
+        </div>
       </div>
     </div>
   );
