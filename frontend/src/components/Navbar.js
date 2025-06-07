@@ -11,29 +11,16 @@ export default function Navbar({ user }) {
   };
 
   return (
-    <div style={styles.navbar}>
-      <span>Welcome, {user.name} ({user.role})</span>
-      <button onClick={logout} style={styles.logout}>Logout</button>
+    <div className="flex justify-between items-center px-6 py-4 bg-blue-600 text-white text-lg shadow-md">
+      <span>
+        Welcome, <span className="font-semibold">{user.name}</span> ({user.role})
+      </span>
+      <button
+        onClick={logout}
+        className="bg-white text-blue-600 px-4 py-2 rounded hover:bg-blue-100 transition"
+      >
+        Logout
+      </button>
     </div>
   );
 }
-
-const styles = {
-  navbar: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '12px 20px',
-    backgroundColor: '#007bff',
-    color: '#fff',
-    fontSize: '16px',
-  },
-  logout: {
-    padding: '6px 12px',
-    backgroundColor: '#fff',
-    color: '#007bff',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-  }
-};

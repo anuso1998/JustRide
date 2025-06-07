@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { db } from '../firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, addDoc, deleteDoc, doc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 
 export default function AdminDashboard() {
@@ -12,7 +12,10 @@ export default function AdminDashboard() {
   const [assignedTrips, setAssignedTrips] = useState([]);
   const [driver, setDriver] = useState('');
   const [drivers, setDrivers] = useState([]);
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [tab, setTab] = useState('trips');
+  const [selectedDriver, setSelectedDriver] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [driverSelectedTrips, setDriverSelectedTrips] = useState(new Set());
 
   const navigate = useNavigate();
 
@@ -23,13 +26,25 @@ export default function AdminDashboard() {
         const driverList = snapshot.docs
           .map(doc => doc.data())
           .filter(user => user.role === 'driver')
-          .map(user => ({ name: user.name || user.email, email: user.email }));
+          .map(user => ({ name: user.name || user.email, ...user }));
         setDrivers(driverList);
       } catch (err) {
         console.error('Error fetching drivers:', err);
       }
     };
+
+    const fetchAssignedTrips = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, 'assignedTrips'));
+        const assigned = snapshot.docs.map(doc => doc.data());
+        setAssignedTrips(assigned);
+      } catch (err) {
+        console.error('Error fetching assigned trips:', err);
+      }
+    };
+
     fetchDrivers();
+    fetchAssignedTrips();
   }, []);
 
   const handleFile = (e) => {
@@ -54,315 +69,225 @@ export default function AdminDashboard() {
     reader.readAsArrayBuffer(file);
   };
 
-  const groupByTripNumber = () => {
-    const tripKey = headers.find(h => h.toLowerCase().includes('trip number'));
-    if (tripKey) {
-      const grouped = [...rows].sort((a, b) => {
-        const tripA = a[tripKey] || '';
-        const tripB = b[tripKey] || '';
-        const baseA = tripA.slice(0, -1);
-        const baseB = tripB.slice(0, -1);
-
-        if (baseA !== baseB) return baseA.localeCompare(baseB);
-        return tripA.slice(-1).localeCompare(tripB.slice(-1));
-      });
-      setRows(grouped);
-    }
-  };
-
-  const sortByPickupCity = () => {
-    const pickupKey = headers.find(h => h.toLowerCase().includes('pickup city'));
-    if (pickupKey) {
-      const sorted = [...rows].sort((a, b) => {
-        const cityA = a[pickupKey]?.toLowerCase() || '';
-        const cityB = b[pickupKey]?.toLowerCase() || '';
-        return cityA.localeCompare(cityB);
-      });
-      setRows(sorted);
-    }
-  };
-
-  const formatTime = (value) => {
-    if (!value) return '';
-    const digits = String(value).padStart(4, '0').replace(/[^0-9]/g, '');
-    if (digits.length === 4) {
-      const hours = digits.slice(0, 2);
-      const minutes = digits.slice(2);
-      return `${hours}:${minutes}`;
-    }
-    return value;
-  };
-
-  const groupLegs = () => {
-    const tripKey = headers.find(h => h.toLowerCase().includes('trip number'));
-    if (!tripKey) return rows;
-
-    const map = new Map();
-    rows.forEach(row => {
-      const tripId = row[tripKey];
-      if (tripId && tripId.length > 1) {
-        const base = tripId.slice(0, -1);
-        if (!map.has(base)) map.set(base, []);
-        map.get(base).push(row);
-      }
-    });
-
-    return Array.from(map.entries());
-  };
-
-  const toggleSelection = (tripId) => {
-    setSelectedTrips(prev => {
-      const copy = new Set(prev);
-      if (copy.has(tripId)) copy.delete(tripId);
-      else copy.add(tripId);
-      return copy;
-    });
-  };
-
-  const assignTripsToDriver = () => {
-    if (!driver) return alert('Please select a driver first');
-
-    const assigned = [...assignedTrips];
-    const tripKey = headers.find(h => h.toLowerCase().includes('trip number'));
-
-    const newAssignedTripGroups = [];
-
-    tripGroups.forEach(([groupId, group]) => {
-      const id = group[0][tripKey];
-      if (selectedTrips.has(id)) {
-        assigned.push({ driver, trips: group });
-        newAssignedTripGroups.push(groupId);
-      }
-    });
-
-    setAssignedTrips(assigned);
-    setRows(prev => prev.filter(row => {
-      const tripId = row[tripKey];
-      const groupBase = tripId?.slice(0, -1);
-      return !newAssignedTripGroups.includes(groupBase);
-    }));
-    setSelectedTrips(new Set());
-    alert(`Assigned ${newAssignedTripGroups.length} trip group(s) to ${driver}`);
-  };
-
-  const unassignTrip = (index) => {
-    const updated = [...assignedTrips];
-    updated.splice(index, 1);
-    setAssignedTrips(updated);
-  };
-
   const logout = () => {
     localStorage.removeItem('user');
     navigate('/');
   };
 
-  const tripGroups = groupLegs();
+  const sortByPickupCity = () => {
+    const sorted = [...rows].sort((a, b) => (a['Pickup City'] || '').localeCompare(b['Pickup City'] || ''));
+    setRows(sorted);
+  };
+
+  const sortByTripNumber = () => {
+    const sorted = [...rows].sort((a, b) => (a['Trip Number'] || '').localeCompare(b['Trip Number'] || ''));
+    setRows(sorted);
+  };
+
+  const toggleSelect = (tripId) => {
+    const newSet = new Set(selectedTrips);
+    const baseId = tripId.slice(0, -1);
+    rows.forEach(row => {
+      if (row['Trip Number']?.startsWith(baseId)) {
+        if (newSet.has(row['Trip Number'])) newSet.delete(row['Trip Number']);
+        else newSet.add(row['Trip Number']);
+      }
+    });
+    setSelectedTrips(newSet);
+  };
+
+  const toggleDriverTripSelect = (tripId) => {
+    const newSet = new Set(driverSelectedTrips);
+    const baseId = tripId.slice(0, -1);
+    const allTrips = assignedTrips.flatMap(g => g.trips);
+    allTrips.forEach(row => {
+      if (row['Trip Number']?.startsWith(baseId)) {
+        if (newSet.has(row['Trip Number'])) newSet.delete(row['Trip Number']);
+        else newSet.add(row['Trip Number']);
+      }
+    });
+    setDriverSelectedTrips(newSet);
+  };
+
+  const groupTrips = (tripArray) => {
+    const groups = {};
+    tripArray.forEach(row => {
+      const id = row['Trip Number']?.slice(0, -1);
+      if (!groups[id]) groups[id] = [];
+      groups[id].push(row);
+    });
+    return Object.values(groups);
+  };
+
+  const assignTripsToDriver = async () => {
+    if (!driver || selectedTrips.size === 0) return;
+    const newAssigned = [];
+    const unassigned = [];
+
+    rows.forEach(row => {
+      const baseId = row['Trip Number']?.slice(0, -1);
+      if (selectedTrips.has(row['Trip Number']) || selectedTrips.has(baseId)) {
+        newAssigned.push(row);
+      } else {
+        unassigned.push(row);
+      }
+    });
+
+    try {
+      await addDoc(collection(db, 'assignedTrips'), {
+        driver,
+        date: new Date().toISOString().split('T')[0],
+        trips: newAssigned
+      });
+      setRows(unassigned);
+      setAssignedTrips(prev => [...prev, { driver, date: new Date().toISOString().split('T')[0], trips: newAssigned }]);
+      setSelectedTrips(new Set());
+    } catch (err) {
+      console.error('Error saving assigned trips:', err);
+    }
+  };
+
+  const handleUnassign = (driverName, groupIndex) => {
+    const updatedAssigned = [...assignedTrips];
+    const [removedGroup] = updatedAssigned.splice(groupIndex, 1);
+    setRows(prev => [...prev, ...removedGroup.trips]);
+    setAssignedTrips(updatedAssigned);
+  };
+
+  const clearAssignedTrips = async () => {
+    const querySnapshot = await getDocs(collection(db, 'assignedTrips'));
+    const confirm = window.confirm("Are you sure you want to delete ALL assigned trips?");
+    if (!confirm) return;
+
+    const deletePromises = querySnapshot.docs.map(docSnap => 
+      deleteDoc(doc(db, 'assignedTrips', docSnap.id))
+    );
+
+    await Promise.all(deletePromises);
+    setAssignedTrips([]);
+    alert('All assigned trips have been cleared.');
+  };
+
+  const renderTripGroup = (group, groupKey, selectFn, selectedSet) => (
+    
+    <div key={groupKey} style={{ border: '2px solid #ccc', borderRadius: '8px', padding: '10px', marginBottom: '10px' }}>
+      {group.map((trip, idx) => (
+        <div
+          key={idx}
+          onClick={() => selectFn(trip['Trip Number'])}
+          style={{ border: selectedSet.has(trip['Trip Number']) ? '2px solid blue' : '1px solid #ccc', borderRadius: '6px', padding: '10px', marginBottom: '5px', cursor: 'pointer' }}
+        >
+          <input
+            type="checkbox"
+            checked={selectedSet.has(trip['Trip Number'])}
+            onChange={() => selectFn(trip['Trip Number'])}
+          />
+          {headers.map((h, j) => (
+            <div key={j}><strong>{h}:</strong> {trip[h]}</div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
 
   return (
-    <div style={styles.container}>
-      <div style={styles.headerBar}>
-        <h2 style={styles.heading}>Admin Dashboard</h2>
-        <button onClick={logout} style={styles.logoutButton}>Logout</button>
+    <div style={{ padding: '20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2>Admin Dashboard</h2>
+        <div>
+          <button onClick={clearAssignedTrips} style={{ backgroundColor: 'red', color: 'white', marginRight: '10px' }}>Clear Assigned Trips</button>
+          <button onClick={logout}>Logout</button>
+        </div>
       </div>
 
-      <div style={styles.tabBar}>
-        <button onClick={() => setActiveTab('dashboard')} style={styles.tabButton}>Dashboard</button>
-        <button onClick={() => setActiveTab('drivers')} style={styles.tabButton}>Drivers</button>
+      <div style={{ marginTop: '20px', marginBottom: '20px' }}>
+        <button onClick={() => setTab('trips')}>Trips</button>
+        <button onClick={() => setTab('drivers')}>Drivers</button>
       </div>
 
-      {activeTab === 'dashboard' && (
-        <>
-          <input type="file" accept=".xlsx,.xls,.csv,.txt" onChange={handleFile} style={styles.fileInput} />
+      {tab === 'trips' && (
+        <div>
+          <input type="file" accept=".xlsx,.xls,.csv,.txt" onChange={handleFile} />
 
           {rows.length > 0 && (
-            <>
-              <div style={styles.buttonGroup}>
-                <button onClick={groupByTripNumber} style={styles.button}>Group by Trip Number</button>
-                <button onClick={sortByPickupCity} style={styles.button}>Sort by Pickup City</button>
-                <select
-                  value={driver}
-                  onChange={e => setDriver(e.target.value)}
-                  style={{ padding: '8px', fontSize: '14px' }}
-                >
-                  <option value="">Select Driver</option>
-                  {drivers.map(d => <option key={d.email} value={d.name}>{d.name}</option>)}
-                </select>
-                <button onClick={assignTripsToDriver} style={styles.button}>Assign to Driver</button>
-              </div>
-
-              <h3 style={styles.subHeading}>Preview ({rows.length} rows)</h3>
-              <div style={styles.cardContainer}>
-                {tripGroups.map(([groupId, group], idx) => (
-                  <div
-                    key={idx}
-                    style={styles.card}
-                    onClick={() => {
-                      const tripId = group[0][headers.find(h => h.toLowerCase().includes('trip number'))];
-                      toggleSelection(tripId);
-                    }}
-                  >
-                    <div style={styles.cardHeader}>Trip Group: {groupId}</div>
-                    <div style={styles.legRow}>
-                      {group.map((trip, tIdx) => (
-                        <div key={tIdx} style={styles.legColumn}>
-                          <input
-                            type="checkbox"
-                            checked={selectedTrips.has(trip[headers.find(h => h.toLowerCase().includes('trip number'))])}
-                            onChange={() => toggleSelection(trip[headers.find(h => h.toLowerCase().includes('trip number'))])}
-                          />
-                          {headers.map((header, hIdx) => (
-                            <div key={hIdx} style={styles.dataRow}>
-                              <strong>{header}:</strong> {header.toLowerCase().includes('time') ? formatTime(trip[header]) : trip[header]}
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {assignedTrips.length > 0 && (
-                <div style={{ marginTop: '30px' }}>
-                  <h3>Assigned Trips</h3>
-                  {assignedTrips.map((assign, idx) => (
-                    <div key={idx} style={styles.card}>
-                      <strong>Driver:</strong> {assign.driver} {' '}
-                      <button onClick={() => unassignTrip(idx)} style={{ marginLeft: '10px', color: 'red' }}>Unassign</button>
-                      {assign.trips.map((trip, tIdx) => (
-                        <div key={tIdx} style={{ marginTop: '10px' }}>
-                          {headers.map((header, hIdx) => (
-                            <div key={hIdx}>
-                              <strong>{header}:</strong> {trip[header]}
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
+            <div>
+              <div style={{ marginTop: '10px' }}>
+                <button onClick={sortByPickupCity}>Sort by Pickup City</button>
+                <button onClick={sortByTripNumber}>Sort by Trip Number</button>
+                <select value={driver} onChange={(e) => setDriver(e.target.value)}>
+                  <option value="">Assign to Driver</option>
+                  {drivers.map((d, idx) => (
+                    <option key={idx} value={d.name}>{d.name}</option>
                   ))}
-                </div>
-              )}
-            </>
+                </select>
+                <button onClick={assignTripsToDriver}>Assign</button>
+              </div>
+              <div style={{ marginTop: '20px' }}>
+                {groupTrips(rows).map((group, idx) => renderTripGroup(group, idx, toggleSelect, selectedTrips))}
+              </div>
+            </div>
           )}
-        </>
+        </div>
       )}
 
-      {activeTab === 'drivers' && (
+      {tab === 'drivers' && (
         <div>
-          <h3>Driver Information</h3>
-          {drivers.map((d, i) => {
-            const trips = assignedTrips.filter(t => t.driver === d.name);
-            return (
-              <div key={i} style={styles.card}>
-                <strong>Name:</strong> {d.name}<br />
-                <strong>Email:</strong> {d.email}<br />
-                <strong>Trips Today:</strong> {trips.length}<br />
-                {trips.map((group, gi) => (
-                  <div key={gi} style={{ marginTop: '10px' }}>
-                    {group.trips.map((trip, tIdx) => (
-                      <div key={tIdx}>
-                        {headers.map((header, hIdx) => (
-                          <div key={hIdx}>
-                            <strong>{header}:</strong> {trip[header]}
-                          </div>
-                        ))}
+          <h3>Drivers Info</h3>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            {drivers.map((d, idx) => (
+              <button key={idx} onClick={() => setSelectedDriver(d)}>{d.name}</button>
+            ))}
+          </div>
+          {selectedDriver && (
+            <div style={{ marginTop: '20px' }}>
+              <h4>{selectedDriver.name}'s Assigned Trips</h4>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+              />
+              <div style={{ marginTop: '10px' }}>
+                {assignedTrips
+                  .map((group, index) => {
+                    if (group.driver !== selectedDriver.name || group.date !== selectedDate) return null;
+                    return (
+                      <div key={index} style={{ marginBottom: '20px' }}>
+                        <button onClick={() => handleUnassign(selectedDriver.name, index)}>Unassign</button>
+                        {groupTrips(group.trips).map((grp, idx) => renderTripGroup(grp, `d-${index}-${idx}`, toggleDriverTripSelect, driverSelectedTrips))}
                       </div>
-                    ))}
-                  </div>
-                ))}
+                    );
+                  })}
               </div>
-            );
-          })}
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
-
 const styles = {
   container: {
     padding: '30px',
-    fontFamily: 'Arial, sans-serif',
-    background: '#f8f9fa',
-    minHeight: '100vh'
+    fontFamily: 'Arial, sans-serif'
   },
-  headerBar: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  datePicker: {
+    padding: '8px',
+    fontSize: '16px',
     marginBottom: '20px'
   },
-  heading: {
-    margin: 0
-  },
-  logoutButton: {
-    padding: '8px 16px',
-    background: '#e74c3c',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer'
-  },
-  tabBar: {
-    marginBottom: '20px'
-  },
-  tabButton: {
-    padding: '10px 20px',
-    marginRight: '10px',
-    background: '#3498db',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer'
-  },
-  fileInput: {
-    marginBottom: '20px'
-  },
-  buttonGroup: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    marginBottom: '20px'
-  },
-  button: {
-    padding: '8px 16px',
-    background: '#2ecc71',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer'
-  },
-  subHeading: {
-    marginTop: '20px'
-  },
-  cardContainer: {
+  tripContainer: {
+    marginTop: '20px',
     display: 'flex',
     flexWrap: 'wrap',
     gap: '20px'
   },
   card: {
-    background: '#fff',
-    border: '1px solid #ddd',
+    border: '1px solid #ccc',
     borderRadius: '8px',
-    padding: '16px',
-    minWidth: '250px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+    padding: '10px',
+    width: '300px'
   },
-  cardHeader: {
-    fontWeight: 'bold',
+  legBlock: {
     marginBottom: '10px'
-  },
-  legRow: {
-    display: 'flex',
-    gap: '10px'
-  },
-  legColumn: {
-    border: '1px solid #eee',
-    borderRadius: '4px',
-    padding: '8px',
-    marginRight: '8px'
-  },
-  dataRow: {
-    marginBottom: '4px'
   }
 };
