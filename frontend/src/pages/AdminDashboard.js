@@ -142,7 +142,7 @@ export default function AdminDashboard() {
       setRows(unassigned);
       setAssignedTrips(prev => [...prev, { driver, date: new Date().toISOString().split('T')[0], trips: newAssigned }]);
       setSelectedTrips(new Set());
-    } catch (err) {
+     } catch (err) {
       console.error('Error saving assigned trips:', err);
     }
   };
@@ -168,27 +168,38 @@ export default function AdminDashboard() {
     alert('All assigned trips have been cleared.');
   };
 
-  const renderTripGroup = (group, groupKey, selectFn, selectedSet) => (
-    
-    <div key={groupKey} style={{ border: '2px solid #ccc', borderRadius: '8px', padding: '10px', marginBottom: '10px' }}>
-      {group.map((trip, idx) => (
-        <div
-          key={idx}
-          onClick={() => selectFn(trip['Trip Number'])}
-          style={{ border: selectedSet.has(trip['Trip Number']) ? '2px solid blue' : '1px solid #ccc', borderRadius: '6px', padding: '10px', marginBottom: '5px', cursor: 'pointer' }}
-        >
-          <input
-            type="checkbox"
-            checked={selectedSet.has(trip['Trip Number'])}
-            onChange={() => selectFn(trip['Trip Number'])}
-          />
-          {headers.map((h, j) => (
-            <div key={j}><strong>{h}:</strong> {trip[h]}</div>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
+  const formatTime = (value) => {
+        if (!value || typeof value !== 'string' && typeof value !== 'number') return '';
+        const digits = String(value).padStart(4, '0').replace(/\D/g, '');
+        if (digits.length !== 4) return value;
+        const hours = digits.slice(0, 2);
+  const minutes = digits.slice(2);
+  return `${hours}:${minutes}`;
+};
+
+const renderTripGroup = (group, groupKey, selectFn, selectedSet) => (
+  <div key={groupKey} style={{ border: '2px solid #ccc', borderRadius: '8px', padding: '10px', marginBottom: '10px' }}>
+    {group.map((trip, idx) => (
+      <div
+        key={idx}
+        onClick={() => selectFn(trip['Trip Number'])}
+        style={{ border: selectedSet.has(trip['Trip Number']) ? '2px solid blue' : '1px solid #ccc', borderRadius: '6px', padding: '10px', marginBottom: '5px', cursor: 'pointer' }}
+      >
+        <input
+          type="checkbox"
+          checked={selectedSet.has(trip['Trip Number'])}
+          onChange={() => selectFn(trip['Trip Number'])}
+        />
+        {headers.map((h, j) => (
+          <div key={j}>
+            <strong>{h}:</strong>{' '}
+            {h.toLowerCase().includes('time') ? formatTime(trip[h]) : trip[h]}
+          </div>
+        ))}
+      </div>
+    ))}
+  </div>
+);
 
   return (
     <div style={{ padding: '20px' }}>

@@ -5,6 +5,8 @@ import Login from './pages/Login';
 import Home from './pages/Home';
 import AdminDashboard from './pages/AdminDashboard';
 import DriverDashboard from './pages/DriverDashboard';
+import Welcome from './pages/Welcome';
+
 
 function App() {
   const [user, setUser] = useState(() => {
@@ -17,6 +19,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/welcome" element={<Welcome />} />
         <Route path="/driver" element={<DriverDashboard user={user} />} />
     
         <Route path="/login" element={<Login setUser={setUser} />} />
