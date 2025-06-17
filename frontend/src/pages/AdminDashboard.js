@@ -1,9 +1,20 @@
-// src/pages/AdminDashboard.js
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { db } from '../firebase';
 import { collection, getDocs, addDoc, deleteDoc, doc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
+import { cities } from '../utils/cities_missouri_full'; // Adjust path if needed
+
+function haversineDistance(lat1, lon1, lat2, lon2) {
+  const R = 3958.8; // radius in miles
+  const toRad = angle => (angle * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+            Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 export default function AdminDashboard() {
   const [rows, setRows] = useState([]);
@@ -16,6 +27,11 @@ export default function AdminDashboard() {
   const [selectedDriver, setSelectedDriver] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [driverSelectedTrips, setDriverSelectedTrips] = useState(new Set());
+  const [filteredDrivers, setFilteredDrivers] = useState([]);
+  const [expandedGroups, setExpandedGroups] = useState({});
+  const toggleExpand = (key) => {
+    setExpandedGroups(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   const navigate = useNavigate();
 
@@ -46,6 +62,25 @@ export default function AdminDashboard() {
     fetchDrivers();
     fetchAssignedTrips();
   }, []);
+
+  const handleTripClick = (trip) => {
+    const cityName = trip['Pickup City'];
+    if (!cityName) return;
+
+    const cityInfo = cities.find(c => c.city.toLowerCase() === cityName.toLowerCase());
+    if (!cityInfo) return;
+
+    const nearbyDrivers = drivers.filter(driver => {
+      if (!driver.city) return false;
+      const driverCity = cities.find(c => c.city.toLowerCase() === driver.city.toLowerCase());
+      if (!driverCity) return false;
+
+      const distance = haversineDistance(cityInfo.lat, cityInfo.lng, driverCity.lat, driverCity.lng);
+      return distance <= 75;
+    });
+
+    setFilteredDrivers(nearbyDrivers);
+  };
 
   const handleFile = (e) => {
     const file = e.target.files[0];
@@ -147,11 +182,26 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleUnassign = (driverName, groupIndex) => {
-    const updatedAssigned = [...assignedTrips];
-    const [removedGroup] = updatedAssigned.splice(groupIndex, 1);
-    setRows(prev => [...prev, ...removedGroup.trips]);
-    setAssignedTrips(updatedAssigned);
+  const handleUnassign = async (driverName, groupIndex) => {
+    const snapshot = await getDocs(collection(db, 'assignedTrips'));
+    const matchingDoc = snapshot.docs.find(doc => {
+      const data = doc.data();
+      return data.driver === driverName && data.date === selectedDate;
+    });
+
+    if (matchingDoc) {
+      try {
+        await deleteDoc(doc(db, 'assignedTrips', matchingDoc.id));
+        const updatedAssigned = [...assignedTrips];
+        const [removedGroup] = updatedAssigned.splice(groupIndex, 1);
+        setRows(prev => [...prev, ...removedGroup.trips]);
+        setAssignedTrips(updatedAssigned);
+        alert('Trip group unassigned and removed from database.');
+      } catch (err) {
+        console.error('Error deleting from Firestore:', err);
+        alert('Error removing assigned trip from database.');
+      }
+    }
   };
 
   const clearAssignedTrips = async () => {
@@ -169,37 +219,72 @@ export default function AdminDashboard() {
   };
 
   const formatTime = (value) => {
-        if (!value || typeof value !== 'string' && typeof value !== 'number') return '';
-        const digits = String(value).padStart(4, '0').replace(/\D/g, '');
-        if (digits.length !== 4) return value;
-        const hours = digits.slice(0, 2);
-  const minutes = digits.slice(2);
-  return `${hours}:${minutes}`;
+    if (!value || typeof value !== 'string' && typeof value !== 'number') return '';
+    const digits = String(value).padStart(4, '0').replace(/\D/g, '');
+    if (digits.length !== 4) return value;
+    const hours = digits.slice(0, 2);
+    const minutes = digits.slice(2);
+    return `${hours}:${minutes}`;
+  };
+
+const renderTripGroup = (group, groupKey, selectFn, selectedSet) => {
+  const isExpanded = expandedGroups[groupKey];
+
+  return (
+    <div key={groupKey} style={{ border: '2px solid #ccc', borderRadius: '8px', marginBottom: '10px' }}>
+      {/* Summary Header */}
+      <div
+        onClick={() => toggleExpand(groupKey)}
+        style={{
+          cursor: 'pointer',
+          backgroundColor: '#f3f3f3',
+          padding: '12px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <div>
+          <strong>Trip Number:</strong> {group[0]['Trip Number'] || 'N/A'}
+        </div>
+        <div style={{ fontSize: '20px' }}>{isExpanded ? '▼' : '▶'}</div>
+      </div>
+
+      {/* Expanded Trip Detail */}
+      {isExpanded && (
+        <div style={{ padding: '10px' }}>
+          {group.map((trip, idx) => (
+            <div
+              key={idx}
+              onClick={() => selectFn(trip['Trip Number'])}
+              style={{
+                border: selectedSet.has(trip['Trip Number']) ? '2px solid blue' : '1px solid #ccc',
+                borderRadius: '6px',
+                padding: '10px',
+                marginBottom: '5px',
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={selectedSet.has(trip['Trip Number'])}
+                onChange={() => selectFn(trip['Trip Number'])}
+              />
+              {headers.map((h, j) =>
+                trip[h] ? (
+                  <div key={j}>
+                    <strong>{h}:</strong> {h.toLowerCase().includes('time') ? formatTime(trip[h]) : trip[h]}
+                  </div>
+                ) : null
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 };
 
-const renderTripGroup = (group, groupKey, selectFn, selectedSet) => (
-  <div key={groupKey} style={{ border: '2px solid #ccc', borderRadius: '8px', padding: '10px', marginBottom: '10px' }}>
-    {group.map((trip, idx) => (
-      <div
-        key={idx}
-        onClick={() => selectFn(trip['Trip Number'])}
-        style={{ border: selectedSet.has(trip['Trip Number']) ? '2px solid blue' : '1px solid #ccc', borderRadius: '6px', padding: '10px', marginBottom: '5px', cursor: 'pointer' }}
-      >
-        <input
-          type="checkbox"
-          checked={selectedSet.has(trip['Trip Number'])}
-          onChange={() => selectFn(trip['Trip Number'])}
-        />
-        {headers.map((h, j) => (
-          <div key={j}>
-            <strong>{h}:</strong>{' '}
-            {h.toLowerCase().includes('time') ? formatTime(trip[h]) : trip[h]}
-          </div>
-        ))}
-      </div>
-    ))}
-  </div>
-);
 
   return (
     <div style={{ padding: '20px' }}>
@@ -227,7 +312,7 @@ const renderTripGroup = (group, groupKey, selectFn, selectedSet) => (
                 <button onClick={sortByTripNumber}>Sort by Trip Number</button>
                 <select value={driver} onChange={(e) => setDriver(e.target.value)}>
                   <option value="">Assign to Driver</option>
-                  {drivers.map((d, idx) => (
+                  {(filteredDrivers.length > 0 ? filteredDrivers : drivers).map((d, idx) => (
                     <option key={idx} value={d.name}>{d.name}</option>
                   ))}
                 </select>
@@ -276,29 +361,3 @@ const renderTripGroup = (group, groupKey, selectFn, selectedSet) => (
     </div>
   );
 }
-const styles = {
-  container: {
-    padding: '30px',
-    fontFamily: 'Arial, sans-serif'
-  },
-  datePicker: {
-    padding: '8px',
-    fontSize: '16px',
-    marginBottom: '20px'
-  },
-  tripContainer: {
-    marginTop: '20px',
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '20px'
-  },
-  card: {
-    border: '1px solid #ccc',
-    borderRadius: '8px',
-    padding: '10px',
-    width: '300px'
-  },
-  legBlock: {
-    marginBottom: '10px'
-  }
-};
