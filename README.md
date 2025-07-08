@@ -1,6 +1,9 @@
 # 🚗 JustRide
 
-A simple, responsive trips and drivers management app with auto-switching dark/light theme and modern dashboard features.
+JustRide is a comprehensive web-based platform designed to streamline Non-Emergency Medical Transportation (NEMT) operations.
+It enables transportation providers to efficiently schedule, assign, and track medical trips while maintaining service quality and compliance. 
+The system supports dispatchers and fleet managers with accurate trip grouping, driver coordination, and real-time updates. 
+By improving operational efficiency and client reliability, JustRide ensures communities have safe, timely access to essential healthcare services.
 
 ---
 
