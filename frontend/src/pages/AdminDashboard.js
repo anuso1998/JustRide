@@ -235,16 +235,9 @@ const renderTripGroup = (group, groupKey, selectFn, selectedSet) => {
       {/* Summary Header */}
       <div
         onClick={() => toggleExpand(groupKey)}
-        style={{
-          cursor: 'pointer',
-          backgroundColor: '#f3f3f3',
-          padding: '12px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
+          className="cursor-pointer bg-gray-200 dark:bg-gray-700 text-black dark:text-white p-3 flex justify-between items-center"
       >
-        <div>
+        <div className="text-black dark:text-white">
           <strong>Trip Number:</strong> {group[0]['Trip Number'] || 'N/A'}
         </div>
         <div style={{ fontSize: '20px' }}>{isExpanded ? '▼' : '▶'}</div>
@@ -257,6 +250,7 @@ const renderTripGroup = (group, groupKey, selectFn, selectedSet) => {
             <div
               key={idx}
               onClick={() => selectFn(trip['Trip Number'])}
+              className={`border ${selectedSet.has(trip['Trip Number']) ? 'border-blue-500' : 'border-gray-300'} rounded-md p-3 mb-2 cursor-pointer bg-gray-50 dark:bg-gray-800 text-black dark:text-white`}
               style={{
                 border: selectedSet.has(trip['Trip Number']) ? '2px solid blue' : '1px solid #ccc',
                 borderRadius: '6px',
@@ -272,7 +266,7 @@ const renderTripGroup = (group, groupKey, selectFn, selectedSet) => {
               />
               {headers.map((h, j) =>
                 trip[h] ? (
-                  <div key={j}>
+                  <div key={j} className="text-black dark:text-white">
                     <strong>{h}:</strong> {h.toLowerCase().includes('time') ? formatTime(trip[h]) : trip[h]}
                   </div>
                 ) : null
@@ -287,7 +281,7 @@ const renderTripGroup = (group, groupKey, selectFn, selectedSet) => {
 
 
   return (
-    <div style={{ padding: '20px' }}>
+    <div className="min-h-screen p-6 bg-white dark:bg-black text-black dark:text-white">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>Admin Dashboard</h2>
         <div>
@@ -296,10 +290,28 @@ const renderTripGroup = (group, groupKey, selectFn, selectedSet) => {
         </div>
       </div>
 
-      <div style={{ marginTop: '20px', marginBottom: '20px' }}>
-        <button onClick={() => setTab('trips')}>Trips</button>
-        <button onClick={() => setTab('drivers')}>Drivers</button>
-      </div>
+      <div className="flex gap-4 my-6">
+  <button
+    onClick={() => setTab('trips')}
+    className={`px-4 py-2 rounded ${
+      tab === 'trips'
+        ? 'bg-blue-600 text-white'
+        : 'bg-gray-300 dark:bg-gray-700 text-black dark:text-white'
+    }`}
+  >
+    Trips
+  </button>
+  <button
+    onClick={() => setTab('drivers')}
+    className={`px-4 py-2 rounded ${
+      tab === 'drivers'
+        ? 'bg-blue-600 text-white'
+        : 'bg-gray-300 dark:bg-gray-700 text-black dark:text-white'
+    }`}
+  >
+    Drivers
+  </button>
+</div>
 
       {tab === 'trips' && (
   <div>
@@ -328,7 +340,7 @@ const renderTripGroup = (group, groupKey, selectFn, selectedSet) => {
               id="assignDriver"
               value={driver}
               onChange={(e) => setDriver(e.target.value)}
-              className="border border-gray-300 rounded px-2 py-1"
+              className="border border-gray-300 rounded px-2 py-1 bg-white dark:bg-gray-900 text-black dark:text-white"
             >
               <option value="">Select Driver</option>
               {(filteredDrivers.length > 0 ? filteredDrivers : drivers).map((d, idx) => (
@@ -359,8 +371,14 @@ const renderTripGroup = (group, groupKey, selectFn, selectedSet) => {
           <h3>Drivers Info</h3>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             {drivers.map((d, idx) => (
-              <button key={idx} onClick={() => setSelectedDriver(d)}>{d.name}</button>
-            ))}
+  <button
+    key={idx}
+    onClick={() => setSelectedDriver(d)}
+    className="px-4 py-2 m-1 bg-gray-200 dark:bg-gray-700 text-black dark:text-white rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+  >
+    {d.name}
+  </button>
+))}
           </div>
           {selectedDriver && (
             <div style={{ marginTop: '20px' }}>
